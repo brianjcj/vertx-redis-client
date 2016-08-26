@@ -16,9 +16,7 @@ public class RedisAuthRecoverTest extends AbstractRedisClientBase {
   @Test
   public void testAutoAuth() throws Exception {
 
-    RedisExecProvider redisExecProvider = RedisExecProvider.defaultProvider();
-    redisExecProvider.override(OS.WINDOWS, "E:\\Program Files\\Redis\\redis-server.exe");
-    RedisServer server = RedisServer.builder().redisExecProvider(redisExecProvider).port(6381).setting("requirepass foobar").build();
+    RedisServer server = RedisServer.builder().redisExecProvider(TestEnvConfig.redisExecProvider).port(6381).setting("requirepass foobar").build();
     server.start();
 
     RedisOptions job = new RedisOptions()
@@ -49,10 +47,7 @@ public class RedisAuthRecoverTest extends AbstractRedisClientBase {
 
   @Test
   public void testRecover() {
-    RedisExecProvider redisExecProvider = RedisExecProvider.defaultProvider();
-    redisExecProvider.override(OS.WINDOWS, "E:\\Program Files\\Redis\\redis-server.exe");
-
-    RedisServer server = RedisServer.builder().port(6381).redisExecProvider(redisExecProvider).setting("requirepass foobar").build();
+    RedisServer server = RedisServer.builder().port(6381).redisExecProvider(TestEnvConfig.redisExecProvider).setting("requirepass foobar").build();
     server.start();
 
     RedisOptions job = new RedisOptions()
