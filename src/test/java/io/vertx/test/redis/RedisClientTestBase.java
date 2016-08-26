@@ -28,8 +28,11 @@ import org.junit.BeforeClass;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import redis.embedded.RedisExecProvider;
 import redis.embedded.RedisServer;
+import redis.embedded.util.OS;
 
+import java.io.File;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
@@ -93,7 +96,9 @@ public abstract class RedisClientTestBase extends VertxTestBase {
   public static void createRedisInstance(final Integer... ports) throws Exception {
     for (Integer port : ports) {
       System.out.println("Creating redis server on port: " + port);
-      instances.put(port, new RedisServer(port));
+      System.out.println("Creating redis server on port: " + port);
+      File exe_file = new File("E:\\Program Files\\Redis\\redis-server.exe");
+      instances.put(port, new RedisServer(exe_file, port));
       System.out.println("Created embedded redis server on port " + port);
     }
   }
@@ -185,7 +190,10 @@ public abstract class RedisClientTestBase extends VertxTestBase {
   //provide auth information
   public void testAuth() throws Exception {
 
-    RedisServer server = RedisServer.builder().port(6381).setting("requirepass foobar").build();
+    RedisExecProvider redisExecProvider = RedisExecProvider.defaultProvider();
+    redisExecProvider.override(OS.WINDOWS, "E:\\Program Files\\Redis\\redis-server.exe");
+
+    RedisServer server = RedisServer.builder().port(6381).redisExecProvider(redisExecProvider).setting("requirepass foobar").build();
     server.start();
     RedisOptions job = new RedisOptions()
         .setHost("localhost")
@@ -479,7 +487,10 @@ public abstract class RedisClientTestBase extends VertxTestBase {
   @Test
   public void testDebugSegfault() throws Exception {
 
-    RedisServer server = RedisServer.builder().port(6381).build();
+    RedisExecProvider redisExecProvider = RedisExecProvider.defaultProvider();
+    redisExecProvider.override(OS.WINDOWS, "E:\\Program Files\\Redis\\redis-server.exe");
+
+    RedisServer server = RedisServer.builder().redisExecProvider(redisExecProvider).port(6381).build();
     server.start();
     RedisOptions job = new RedisOptions()
         .setHost("localhost")
@@ -1590,7 +1601,10 @@ public abstract class RedisClientTestBase extends VertxTestBase {
 
   @Test
   public void testMigrate() throws Exception {
-    RedisServer server = RedisServer.builder().port(6382).build();
+    RedisExecProvider redisExecProvider = RedisExecProvider.defaultProvider();
+    redisExecProvider.override(OS.WINDOWS, "E:\\Program Files\\Redis\\redis-server.exe");
+
+    RedisServer server = RedisServer.builder().redisExecProvider(redisExecProvider).port(6382).build();
     server.start();
     RedisOptions job = new RedisOptions()
         .setHost("localhost")

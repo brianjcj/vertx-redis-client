@@ -1,16 +1,24 @@
 package io.vertx.test.redis;
 
+import com.kenai.jffi.Platform;
+import com.kenai.jffi.internal.StubLoader;
 import io.vertx.redis.RedisClient;
 import io.vertx.redis.RedisOptions;
 import org.junit.Test;
+import redis.embedded.RedisExecProvider;
 import redis.embedded.RedisServer;
+import redis.embedded.util.OS;
+
+import java.io.File;
 
 public class RedisAuthRecoverTest extends AbstractRedisClientBase {
 
   @Test
   public void testAutoAuth() throws Exception {
 
-    RedisServer server = RedisServer.builder().port(6381).setting("requirepass foobar").build();
+    RedisExecProvider redisExecProvider = RedisExecProvider.defaultProvider();
+    redisExecProvider.override(OS.WINDOWS, "E:\\Program Files\\Redis\\redis-server.exe");
+    RedisServer server = RedisServer.builder().redisExecProvider(redisExecProvider).port(6381).setting("requirepass foobar").build();
     server.start();
 
     RedisOptions job = new RedisOptions()
@@ -41,8 +49,10 @@ public class RedisAuthRecoverTest extends AbstractRedisClientBase {
 
   @Test
   public void testRecover() {
+    RedisExecProvider redisExecProvider = RedisExecProvider.defaultProvider();
+    redisExecProvider.override(OS.WINDOWS, "E:\\Program Files\\Redis\\redis-server.exe");
 
-    RedisServer server = RedisServer.builder().port(6381).setting("requirepass foobar").build();
+    RedisServer server = RedisServer.builder().port(6381).redisExecProvider(redisExecProvider).setting("requirepass foobar").build();
     server.start();
 
     RedisOptions job = new RedisOptions()

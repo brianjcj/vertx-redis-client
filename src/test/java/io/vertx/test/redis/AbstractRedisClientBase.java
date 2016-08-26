@@ -28,6 +28,7 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import redis.embedded.RedisServer;
 
+import java.io.File;
 import java.nio.charset.Charset;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -107,7 +108,8 @@ public abstract class AbstractRedisClientBase extends VertxTestBase {
   public static void createRedisInstance(final Integer... ports) throws Exception {
     for(Integer port: ports) {
       System.out.println("Creating redis server on port: " + port);
-      instances.put(port, new RedisServer(port));
+      File exe_file = new File("E:\\Program Files\\Redis\\redis-server.exe");
+      instances.put(port, new RedisServer(exe_file, port));
       System.out.println("Created embedded redis server on port " + port);
     }
   }
