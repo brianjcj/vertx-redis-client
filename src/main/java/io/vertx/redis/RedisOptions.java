@@ -229,13 +229,8 @@ public class RedisOptions {
     return this;
   }
 
-  public int getConnectionTimeout() {
-    Integer timeout = json.getInteger("connectTimeout");
-    if (timeout == null) {
-      return TCPSSLOptions.DEFAULT_IDLE_TIMEOUT;
-    } else {
-      return timeout.intValue();
-    }
+  public int getConnectTimeout() {
+    return json.getInteger("connectTimeout", TCPSSLOptions.DEFAULT_IDLE_TIMEOUT);
   }
 
   /**

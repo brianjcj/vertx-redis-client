@@ -104,7 +104,7 @@ class RedisConnection {
     client = vertx.createNetClient(new NetClientOptions()
         .setTcpKeepAlive(config.isTcpKeepAlive())
         .setTcpNoDelay(config.isTcpNoDelay())
-        .setConnectTimeout(config.getConnectionTimeout()));
+        .setConnectTimeout(config.getConnectTimeout()));
 
     if (subscriptions != null) {
       this.replyParser = new ReplyParser(reply -> {
