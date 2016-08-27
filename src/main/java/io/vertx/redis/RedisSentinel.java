@@ -9,10 +9,17 @@ import io.vertx.redis.impl.RedisSentinelClientImpl;
 /**
  * Interface for sentinel commands
  */
-public interface RedisSentinel extends BaseRedisClient {
+public interface RedisSentinel {
     static RedisSentinel create(Vertx vertx, RedisOptions config) {
         return new RedisSentinelClientImpl(vertx, config);
     }
+
+    /**
+     * Close the client - when it is fully closed the handler will be called.
+     *
+     * @param handler
+     */
+    void close(Handler<AsyncResult<Void>> handler);
 
     /**
      * Show a list of monitored masters and their state

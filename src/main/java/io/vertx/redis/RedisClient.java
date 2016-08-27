@@ -31,7 +31,7 @@ import java.util.List;
 import java.util.Map;
 
 @VertxGen
-public interface RedisClient extends BaseRedisClient {
+public interface RedisClient {
 
   static RedisClient create(Vertx vertx) {
     return new RedisClientImpl(vertx, new RedisOptions());
@@ -49,6 +49,13 @@ public interface RedisClient extends BaseRedisClient {
   static RedisClient create(Vertx vertx, RedisOptions config) {
     return new RedisClientImpl(vertx, config);
   }
+
+  /**
+   * Close the client - when it is fully closed the handler will be called.
+   *
+   * @param handler
+   */
+  void close(Handler<AsyncResult<Void>> handler);
 
   /**
    * Append a value to a key

@@ -152,7 +152,7 @@ class RedisConnection {
       sentinelList = new SentinelList();
       for (int i = 0; i < sentinelJa.size(); ++i) {
         JsonObject jo = sentinelJa.getJsonObject(i);
-        sentinelList.add(new SentinelList.SentinelInfo(jo.getString("ip"), jo.getInteger("port")));
+        sentinelList.add(new SentinelList.SentinelInfo(jo.getString("host"), jo.getInteger("port")));
       }
     }
 
@@ -182,10 +182,15 @@ class RedisConnection {
     sentinel.getMasterAddrByName(config.getMaster(), event -> {
       if (event.failed()) {
         // try next one
+        log.debug("failed sentinel index: " + index + ", host: " + info.getHost() + ", port: " + info.getPort());
         connectViaSentinel(index + 1);
       } else {
-        connectWithPortAndHost(event.result().getInteger(1), event.result().getString(0), index);
+        log.debug("succeeded sentinel index: " + index + ", host: " + info.getHost() + ", port: " + info.getPort());
+        log.debug("got master address: " + event.result());
+        connectWithPortAndHost(Integer.parseInt(event.result().getString(1)), event.result().getString(0), index);
       }
+
+      sentinel.close(voidAsyncResult -> {});
     });
 
   }
@@ -196,7 +201,10 @@ class RedisConnection {
         // clean up any waiting command
         clearQueue(waiting, cause);
         // clean up any pending command
-        clearQueue(pending, cause);
+
+        if (sentinelList == null) {
+          clearQueue(pending, cause);
+        }
 
         // close the socket if previously connected
         if (netSocket != null) {
@@ -213,6 +221,9 @@ class RedisConnection {
     client.connect(port, host, asyncResult -> {
       if (asyncResult.failed()) {
         handleConnectFailed(asyncResult.cause());
+        if (sentinelList != null) {
+          retryConnectWithDelay();
+        }
       } else {
         netSocket = asyncResult.result()
             .handler(replyParser)
@@ -386,7 +397,7 @@ class RedisConnection {
 
       } else {
         //  success, proceed with select
-        if (sentinelList != null) {
+        if (sentinelList != null && sentinelIndex != 0) {
           sentinelList.moveSentinelToFront(sentinelIndex);
         }
         doSelect();
@@ -403,6 +414,7 @@ class RedisConnection {
   }
 
   private void retryConnectWithDelay() {
+    log.debug("retryConnectWithDelay");
     this.vertx.setTimer(RETRY_INTERVAL, event -> connect());
   }
 
