@@ -28,8 +28,11 @@ import org.junit.BeforeClass;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import redis.embedded.RedisExecProvider;
 import redis.embedded.RedisServer;
+import redis.embedded.util.OS;
 
+import java.io.File;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
@@ -93,7 +96,8 @@ public abstract class RedisClientTestBase extends VertxTestBase {
   public static void createRedisInstance(final Integer... ports) throws Exception {
     for (Integer port : ports) {
       System.out.println("Creating redis server on port: " + port);
-      instances.put(port, new RedisServer(port));
+      System.out.println("Creating redis server on port: " + port);
+      instances.put(port, new RedisServer(TestEnvConfig.redisExecProvider, port));
       System.out.println("Created embedded redis server on port " + port);
     }
   }
@@ -184,8 +188,7 @@ public abstract class RedisClientTestBase extends VertxTestBase {
   //Note the try/finally is to ensure that the server is shutdown so other tests do not have to
   //provide auth information
   public void testAuth() throws Exception {
-
-    RedisServer server = RedisServer.builder().port(6381).setting("requirepass foobar").build();
+    RedisServer server = RedisServer.builder().redisExecProvider(TestEnvConfig.redisExecProvider).port(6381).setting("requirepass foobar").build();
     server.start();
     RedisOptions job = new RedisOptions()
         .setHost("localhost")
@@ -478,8 +481,7 @@ public abstract class RedisClientTestBase extends VertxTestBase {
 
   @Test
   public void testDebugSegfault() throws Exception {
-
-    RedisServer server = RedisServer.builder().port(6381).build();
+    RedisServer server = RedisServer.builder().redisExecProvider(TestEnvConfig.redisExecProvider).port(6381).build();
     server.start();
     RedisOptions job = new RedisOptions()
         .setHost("localhost")
@@ -1590,7 +1592,7 @@ public abstract class RedisClientTestBase extends VertxTestBase {
 
   @Test
   public void testMigrate() throws Exception {
-    RedisServer server = RedisServer.builder().port(6382).build();
+    RedisServer server = RedisServer.builder().redisExecProvider(TestEnvConfig.redisExecProvider).port(6382).build();
     server.start();
     RedisOptions job = new RedisOptions()
         .setHost("localhost")

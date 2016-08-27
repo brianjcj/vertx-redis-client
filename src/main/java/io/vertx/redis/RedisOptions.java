@@ -17,7 +17,10 @@ package io.vertx.redis;
 
 import io.vertx.codegen.annotations.DataObject;
 import io.vertx.core.Handler;
+import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
+import io.vertx.core.net.TCPSSLOptions;
+import io.vertx.redis.impl.RedisCommand;
 
 /**
  * This object controls the connection setting to the Redis Server. There is no need to specify most of the settings
@@ -200,6 +203,39 @@ public class RedisOptions {
    */
   public Integer getSelect() {
     return json.getInteger("select");
+  }
+
+  // [{"host": "1.1.1.1", port: 1234}]
+  public RedisOptions setSentinels(JsonArray sentinels) {
+    json.put("sentinels", sentinels);
+    return this;
+  }
+
+  public JsonArray getSentinels() {
+    return json.getJsonArray("sentinels");
+  }
+
+  public RedisOptions setMaster(String name) {
+    json.put("master", name);
+    return this;
+  }
+
+  public String getMaster() {
+    return json.getString("master");
+  }
+
+  public RedisOptions setConnectTimeout(int timeout) {
+    json.put("connectTimeout", timeout);
+    return this;
+  }
+
+  public int getConnectionTimeout() {
+    Integer timeout = json.getInteger("connectTimeout");
+    if (timeout == null) {
+      return TCPSSLOptions.DEFAULT_IDLE_TIMEOUT;
+    } else {
+      return timeout.intValue();
+    }
   }
 
   /**

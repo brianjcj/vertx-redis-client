@@ -26,8 +26,11 @@ import org.junit.BeforeClass;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import redis.embedded.RedisExecProvider;
 import redis.embedded.RedisServer;
+import redis.embedded.util.OS;
 
+import java.io.File;
 import java.nio.charset.Charset;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -35,7 +38,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 public abstract class AbstractRedisClientBase extends VertxTestBase {
-
   private static final Integer DEFAULT_PORT = 6379;
 
   private static final Map<Integer, RedisServer> instances = new ConcurrentHashMap<>();
@@ -107,7 +109,7 @@ public abstract class AbstractRedisClientBase extends VertxTestBase {
   public static void createRedisInstance(final Integer... ports) throws Exception {
     for(Integer port: ports) {
       System.out.println("Creating redis server on port: " + port);
-      instances.put(port, new RedisServer(port));
+      instances.put(port, new RedisServer(TestEnvConfig.redisExecProvider, port));
       System.out.println("Created embedded redis server on port " + port);
     }
   }

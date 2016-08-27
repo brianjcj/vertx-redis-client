@@ -24,6 +24,7 @@ import io.vertx.core.net.NetClient;
 import io.vertx.core.net.NetClientOptions;
 import io.vertx.core.net.NetSocket;
 import io.vertx.redis.RedisOptions;
+import io.vertx.redis.RedisSentinel;
 
 import java.nio.charset.Charset;
 import java.util.ArrayList;
@@ -37,6 +38,9 @@ import java.util.concurrent.atomic.AtomicReference;
  * in this class to implement typed commands.
  */
 class RedisConnection {
+
+  public static final int RETRY_INTERVAL = 300;
+  private final Vertx vertx;
 
   private final Context context;
 
@@ -86,17 +90,21 @@ class RedisConnection {
 
   private volatile NetSocket netSocket;
 
+  private SentinelList sentinelList;
+
   /**
    * Create a RedisConnection.
    */
   public RedisConnection(Vertx vertx, RedisOptions config, RedisSubscriptions subscriptions) {
+    this.vertx = vertx;
     this.context = vertx.getOrCreateContext();
     this.config = config;
 
     // create a netClient for the connection
     client = vertx.createNetClient(new NetClientOptions()
         .setTcpKeepAlive(config.isTcpKeepAlive())
-        .setTcpNoDelay(config.isTcpNoDelay()));
+        .setTcpNoDelay(config.isTcpNoDelay())
+        .setConnectTimeout(config.getConnectionTimeout()));
 
     if (subscriptions != null) {
       this.replyParser = new ReplyParser(reply -> {
@@ -130,63 +138,126 @@ class RedisConnection {
     } else {
       this.replyParser = new ReplyParser(this::handleReply);
     }
+
+    // sentinel
+    final String master = config.getMaster();
+    if (master != null && !master.isEmpty()) {
+      // connect via sentinel
+
+      JsonArray sentinelJa = config.getSentinels();
+      if (sentinelJa == null || sentinelJa.isEmpty()) {
+        throw new RuntimeException("Sentinels is not config!");
+      }
+
+      sentinelList = new SentinelList();
+      for (int i = 0; i < sentinelJa.size(); ++i) {
+        JsonObject jo = sentinelJa.getJsonObject(i);
+        sentinelList.add(new SentinelList.SentinelInfo(jo.getString("host"), jo.getInteger("port")));
+      }
+    }
+
   }
 
   private void connect() {
     if (state.compareAndSet(State.DISCONNECTED, State.CONNECTING)) {
       replyParser.reset();
 
-      client.connect(config.getPort(), config.getHost(), asyncResult -> {
-        if (asyncResult.failed()) {
-          runOnContext(v -> {
-            if (state.compareAndSet(State.CONNECTING, State.ERROR)) {
-              // clean up any waiting command
-              clearQueue(waiting, asyncResult.cause());
-              // clean up any pending command
-              clearQueue(pending, asyncResult.cause());
-
-              // close the socket if previously connected
-              if (netSocket != null) {
-                netSocket.close();
-              }
-
-              state.set(State.DISCONNECTED);
-            }
-          });
-        } else {
-          netSocket = asyncResult.result()
-              .handler(replyParser)
-              .closeHandler(v -> runOnContext(v0 -> {
-                state.set(State.ERROR);
-                // clean up any waiting command
-                clearQueue(waiting, "Connection closed");
-                // clean up any pending command
-                clearQueue(pending, "Connection closed");
-
-                state.set(State.DISCONNECTED);
-              }))
-              .exceptionHandler(e -> runOnContext(v0 -> {
-                state.set(State.ERROR);
-                // clean up any waiting command
-                clearQueue(waiting, e);
-                // clean up any pending command
-                clearQueue(pending, e);
-
-                netSocket.close();
-                state.set(State.DISCONNECTED);
-              }));
-
-          runOnContext(v -> {
-            // clean up any waiting command
-            clearQueue(waiting, "Connection lost");
-
-            // handle the connection handshake
-            doAuth();
-          });
-        }
-      });
+      if (sentinelList != null) {
+        connectViaSentinel(0);
+      } else {
+        connectWithPortAndHost(config.getPort(), config.getHost(), -1);
+      }
     }
   }
+
+  private void connectViaSentinel(int index) {
+    if (index >= sentinelList.size()) {
+      handleConnectFailed(new RuntimeException("failed to connect sentinels!"));
+      retryConnectWithDelay();
+      return;
+    }
+
+    SentinelList.SentinelInfo info = sentinelList.get(index);
+    RedisSentinel sentinel = RedisSentinel.create(vertx, new RedisOptions().setPort(info.getPort()).setHost(info.getHost()).setConnectTimeout(RETRY_INTERVAL));
+    sentinel.getMasterAddrByName(config.getMaster(), event -> {
+      if (event.failed()) {
+        // try next one
+        log.debug("failed sentinel index: " + index + ", host: " + info.getHost() + ", port: " + info.getPort());
+        connectViaSentinel(index + 1);
+      } else {
+        log.debug("succeeded sentinel index: " + index + ", host: " + info.getHost() + ", port: " + info.getPort());
+        log.debug("got master address: " + event.result());
+        connectWithPortAndHost(Integer.parseInt(event.result().getString(1)), event.result().getString(0), index);
+      }
+
+      sentinel.close(voidAsyncResult -> {});
+    });
+
+  }
+
+  private void handleConnectFailed(Throwable cause) {
+    runOnContext(v -> {
+      if (state.compareAndSet(State.CONNECTING, State.ERROR)) {
+        // clean up any waiting command
+        clearQueue(waiting, cause);
+        // clean up any pending command
+
+        if (sentinelList == null) {
+          clearQueue(pending, cause);
+        }
+
+        // close the socket if previously connected
+        if (netSocket != null) {
+          netSocket.close();
+        }
+
+        state.set(State.DISCONNECTED);
+      }
+    });
+
+  }
+
+  private void connectWithPortAndHost(int port, String host, int sentinelIndex) {
+    client.connect(port, host, asyncResult -> {
+      if (asyncResult.failed()) {
+        handleConnectFailed(asyncResult.cause());
+        if (sentinelList != null) {
+          retryConnectWithDelay();
+        }
+      } else {
+        netSocket = asyncResult.result()
+            .handler(replyParser)
+            .closeHandler(v -> runOnContext(v0 -> {
+              state.set(State.ERROR);
+              // clean up any waiting command
+              clearQueue(waiting, "Connection closed");
+              // clean up any pending command
+              clearQueue(pending, "Connection closed");
+
+              state.set(State.DISCONNECTED);
+            }))
+            .exceptionHandler(e -> runOnContext(v0 -> {
+              state.set(State.ERROR);
+              // clean up any waiting command
+              clearQueue(waiting, e);
+              // clean up any pending command
+              clearQueue(pending, e);
+
+              netSocket.close();
+              state.set(State.DISCONNECTED);
+            }));
+
+        runOnContext(v -> {
+          // clean up any waiting command
+          clearQueue(waiting, "Connection lost");
+
+          // handle the connection handshake
+          doAuth(sentinelIndex);
+        });
+      }
+    });
+  }
+
 
   void disconnect(Handler<AsyncResult<Void>> closeHandler) {
     switch (state.get()) {
@@ -265,8 +336,9 @@ class RedisConnection {
 
   /**
    * Once a socket connection is established one needs to authenticate if there is a password
+   * @param sentinelIndex
    */
-  private void doAuth() {
+  private void doAuth(int sentinelIndex) {
     if (config.getAuth() != null) {
       // we need to authenticate first
       final List<Object> args = new ArrayList<>();
@@ -279,8 +351,8 @@ class RedisConnection {
           netSocket.close();
           state.set(State.DISCONNECTED);
         } else {
-          // auth success, proceed with select
-          doSelect();
+          // auth success, proceed with role
+          doRole(sentinelIndex);
         }
       });
 
@@ -291,9 +363,59 @@ class RedisConnection {
         authCmd.writeTo(netSocket);
       });
     } else {
-      // no auth, proceed with select
-      doSelect();
+      // no auth, proceed with role
+      doRole(sentinelIndex);
     }
+  }
+
+  private void doRole(int sentinelIndex) {
+
+    if (sentinelList == null) {
+      doSelect();
+      return;
+    }
+
+    Command<JsonArray> roleCmd = new Command<>(context, RedisCommand.ROLE, null, Charset.forName(config.getEncoding()), ResponseTransform.NONE, JsonArray.class).handler(res -> {
+      boolean ok;
+      if (res.failed()) {
+        ok = false;
+      } else {
+        if (res.result().getString(0).equals("master")) {
+          ok = true;
+        } else {
+          ok = false;
+        }
+      }
+
+      if (!ok) {
+        // clean up any waiting command
+        clearQueue(pending, res.cause());
+        netSocket.close();
+        state.set(State.DISCONNECTED);
+
+        retryConnectWithDelay();
+
+      } else {
+        //  success, proceed with select
+        if (sentinelList != null && sentinelIndex != 0) {
+          sentinelList.moveSentinelToFront(sentinelIndex);
+        }
+        doSelect();
+      }
+    });
+
+    // write to the socket in the netSocket context
+    runOnContext(v -> {
+      // queue it
+      waiting.add(roleCmd);
+      roleCmd.writeTo(netSocket);
+    });
+
+  }
+
+  private void retryConnectWithDelay() {
+    log.debug("retryConnectWithDelay");
+    this.vertx.setTimer(RETRY_INTERVAL, event -> connect());
   }
 
   private void doSelect() {
