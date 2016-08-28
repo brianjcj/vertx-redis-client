@@ -63,6 +63,7 @@ public class RedisClientBackedBySentinelTest extends RedisSentinelClientTestBase
 
         JsonArray ja = new JsonArray();
         for (int i = 0; i < 3; ++i) {
+            // -1 to make a false sentinel, to test unreachable sentinel case.
             ja.add(new JsonObject().put("host", host).put("port", DEFAULT_SENTINEL_PORT + i - 1));
         }
 
@@ -78,6 +79,7 @@ public class RedisClientBackedBySentinelTest extends RedisSentinelClientTestBase
                 assertTrue(result2.succeeded());
                 assertTrue(result2.result().equals("ivy"));
 
+                // simulate the master down case.
                 instances.get(DEFAULT_PORT).stop();
                 //instances.get(DEFAULT_PORT).start();
 

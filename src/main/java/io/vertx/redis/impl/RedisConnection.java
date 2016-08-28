@@ -39,7 +39,6 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 class RedisConnection {
 
-  public static final int RETRY_INTERVAL = 300;
   private final Vertx vertx;
 
   private final Context context;
@@ -178,7 +177,9 @@ class RedisConnection {
     }
 
     SentinelList.SentinelInfo info = sentinelList.get(index);
-    RedisSentinel sentinel = RedisSentinel.create(vertx, new RedisOptions().setPort(info.getPort()).setHost(info.getHost()).setConnectTimeout(RETRY_INTERVAL));
+    RedisSentinel sentinel = RedisSentinel.create(vertx,
+            new RedisOptions().setPort(info.getPort()).setHost(info.getHost())
+                    .setConnectTimeout(config.getSentinelConnectTimeout()));
     sentinel.getMasterAddrByName(config.getMaster(), event -> {
       if (event.failed()) {
         // try next one
@@ -415,7 +416,7 @@ class RedisConnection {
 
   private void retryConnectWithDelay() {
     log.debug("retryConnectWithDelay");
-    this.vertx.setTimer(RETRY_INTERVAL, event -> connect());
+    this.vertx.setTimer(config.getSentinelConnectTimeout(), event -> connect());
   }
 
   private void doSelect() {

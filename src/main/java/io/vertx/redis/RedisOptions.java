@@ -205,30 +205,78 @@ public class RedisOptions {
     return json.getInteger("select");
   }
 
-  // [{"host": "1.1.1.1", port: 1234}]
+  /**
+   * Set the sentinels for getting master address at connection time.
+   *
+   * @param sentinels e.g., [{"host": "1.1.1.1", port: 1234}]
+   * @return self
+   */
   public RedisOptions setSentinels(JsonArray sentinels) {
     json.put("sentinels", sentinels);
     return this;
   }
 
+  /**
+   * Get the sentinels for getting master address at connection time.
+   * @return sentinels
+   */
   public JsonArray getSentinels() {
     return json.getJsonArray("sentinels");
   }
 
+  /**
+   * Set the master name.
+   *
+   * @param name
+   * @return self
+   */
   public RedisOptions setMaster(String name) {
     json.put("master", name);
     return this;
   }
 
+  /**
+   * Get the master name.
+   * @return master name
+   */
   public String getMaster() {
     return json.getString("master");
   }
 
+
+  /**
+   * Set the connect timeout for connect sentinels to get master address.
+   *
+   * @param timeout
+   * @return self
+   */
+  public RedisOptions setSentinelConnectTimeout(int timeout) {
+    json.put("sentinelConnectTimeout", timeout);
+    return this;
+  }
+
+  /**
+   * Get the connect timeout for connect sentinels to get master address.
+   * @return timeout
+   */
+  public int getSentinelConnectTimeout() {
+    return json.getInteger("sentinelConnectTimeout", 300);
+  }
+
+  /**
+   * Set connect timeout for connecting redis instance
+   * @param timeout
+   * @return self
+   */
   public RedisOptions setConnectTimeout(int timeout) {
     json.put("connectTimeout", timeout);
     return this;
   }
 
+  /**
+   * Get connect timeout for connecting redis instance.
+   * @return timeout
+   */
   public int getConnectTimeout() {
     return json.getInteger("connectTimeout", TCPSSLOptions.DEFAULT_IDLE_TIMEOUT);
   }
